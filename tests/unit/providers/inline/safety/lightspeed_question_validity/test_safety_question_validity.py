@@ -6,9 +6,14 @@ from lightspeed_stack_providers.providers.inline.safety.lightspeed_question_vali
     SUBJECT_ALLOWED,
     SUBJECT_REJECTED,
 )
-from llama_stack.apis.inference import UserMessage, CompletionMessage
+from llama_stack.apis.inference import (
+    UserMessage,
+    OpenAIChatCompletion,
+    OpenAIChoice,
+    OpenAIAssistantMessageParam,
+    OpenAIUserMessageParam,
+)
 from llama_stack.apis.safety import SafetyViolation, ViolationLevel, RunShieldResponse
-from llama_stack.apis.inference import ChatCompletionResponse
 
 
 @pytest.fixture
@@ -60,36 +65,48 @@ def test_get_shield_response_rejected(question_validity_runner):
     )
 
 
+def _create_mock_openai_response(content: str) -> OpenAIChatCompletion:
+    """Helper to create a mock OpenAI chat completion response."""
+    return OpenAIChatCompletion(
+        id="test-id",
+        choices=[
+            OpenAIChoice(
+                message=OpenAIAssistantMessageParam(role="assistant", content=content),
+                finish_reason="stop",
+                index=0,
+            )
+        ],
+        created=1234567890,
+        model="test-model",
+    )
+
+
 @pytest.mark.asyncio
 async def test_run_allowed(question_validity_runner, mock_inference_api):
     """Test the run method for an allowed question."""
     message = UserMessage(content="How do I create a Kubernetes service?")
-    mock_inference_api.chat_completion.return_value = ChatCompletionResponse(
-        completion_message=CompletionMessage(
-            role="assistant", content=SUBJECT_ALLOWED, stop_reason="end_of_turn"
-        )
+    mock_inference_api.openai_chat_completion.return_value = _create_mock_openai_response(
+        SUBJECT_ALLOWED
     )
 
     response = await question_validity_runner.run(message)
 
     assert response.violation is None
-    mock_inference_api.chat_completion.assert_called_once()
+    mock_inference_api.openai_chat_completion.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_run_rejected(question_validity_runner, mock_inference_api):
     """Test the run method for a rejected question."""
     message = UserMessage(content="What is the weather today?")
-    mock_inference_api.chat_completion.return_value = ChatCompletionResponse(
-        completion_message=CompletionMessage(
-            role="assistant", content=SUBJECT_REJECTED, stop_reason="end_of_turn"
-        )
+    mock_inference_api.openai_chat_completion.return_value = _create_mock_openai_response(
+        SUBJECT_REJECTED
     )
 
     response = await question_validity_runner.run(message)
 
     assert isinstance(response.violation, SafetyViolation)
-    mock_inference_api.chat_completion.assert_called_once()
+    mock_inference_api.openai_chat_completion.assert_called_once()
 
 
 @pytest.fixture
@@ -118,7 +135,11 @@ async def test_run_shield_allowed(question_validity_shield_impl, mocker):
     mock_runner.return_value.run = mocker.AsyncMock(
         return_value=RunShieldResponse(violation=None)
     )
-    messages = [UserMessage(content="How do I create a Kubernetes service?")]
+    messages = [
+        OpenAIUserMessageParam(
+            role="user", content="How do I create a Kubernetes service?"
+        )
+    ]
 
     response = await question_validity_shield_impl.run_shield("test_shield", messages)
 
@@ -140,7 +161,9 @@ async def test_run_shield_rejected(question_validity_shield_impl, mocker):
             )
         )
     )
-    messages = [UserMessage(content="What is the weather today?")]
+    messages = [
+        OpenAIUserMessageParam(role="user", content="What is the weather today?")
+    ]
 
     response = await question_validity_shield_impl.run_shield("test_shield", messages)
 

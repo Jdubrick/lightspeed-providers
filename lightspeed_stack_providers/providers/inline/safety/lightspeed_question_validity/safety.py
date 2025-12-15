@@ -17,11 +17,14 @@ from llama_stack.apis.safety import (
 from llama_stack.apis.safety.safety import (
     ModerationObject,
     ModerationObjectResults,
+    OpenAIMessageParam,
 )
 from llama_stack.apis.inference import (
     Inference,
-    Message,
     UserMessage,
+    OpenAIChatCompletionRequestWithExtraBody,
+    OpenAIChatCompletion,
+    OpenAIUserMessageParam,
 )
 
 log = logging.getLogger(__name__)
@@ -90,11 +93,12 @@ class QuestionValidityShieldImpl(Safety, ShieldsProtocolPrivate):
     async def run_shield(
         self,
         shield_id: str,
-        messages: list[Message],
+        messages: list[OpenAIMessageParam],
         params: dict[str, Any] = None,
     ) -> RunShieldResponse:
-        # Take last UserMessage
-        message: UserMessage = [m for m in messages if isinstance(m, UserMessage)][-1]
+        # Take last user message and convert to UserMessage for internal processing
+        last_user_msg = [m for m in messages if m.role == "user"][-1]
+        message = UserMessage(content=last_user_msg.content)
         log.debug(f"Shield UserMessage: {message.content}")
 
         impl = QuestionValidityRunner(
@@ -149,11 +153,16 @@ class QuestionValidityRunner:
         shield_input_message = self.build_text_shield_input(message)
         log.debug(f"Shield input message: {shield_input_message}")
 
-        response = await self.inference_api.chat_completion(
-            model_id=self.model_id,
-            messages=[shield_input_message],
-            stream=False,
+        response: OpenAIChatCompletion = await self.inference_api.openai_chat_completion(
+            OpenAIChatCompletionRequestWithExtraBody(
+                model=self.model_id,
+                messages=[
+                    OpenAIUserMessageParam(
+                        role="user", content=shield_input_message.content
+                    )
+                ],
+            )
         )
-        content = response.completion_message.content
+        content = response.choices[0].message.content
         content = content.strip()
         return self.get_shield_response(content)
