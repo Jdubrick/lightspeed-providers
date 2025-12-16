@@ -40,6 +40,7 @@ class QuestionValidityShieldImpl(Safety, ShieldsProtocolPrivate):
         pass
 
     async def run_moderation(self, input: str | list[str], model: str) -> ModerationObject:
+        log.debug("Hit run_moderation!!")
         return ModerationObject(
             id="noop",
             model=model,
@@ -61,6 +62,7 @@ class QuestionValidityShieldImpl(Safety, ShieldsProtocolPrivate):
         messages,
         params: dict[str, Any] | None = None,
     ) -> RunShieldResponse:
+        log.debug("Hit run_shield")
         # Safely extract the last user message
         user_messages = [m for m in messages if m.role == "user"]
         if not user_messages:
