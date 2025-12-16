@@ -5,7 +5,7 @@ from string import Template
 from lightspeed_stack_providers.providers.inline.safety.lightspeed_question_validity.config import (
     QuestionValidityShieldConfig,
 )
-
+from llama_stack.apis.safety.safety import ModerationObject, ModerationObjectResults
 from llama_stack.apis.datatypes import Api
 from llama_stack.providers.datatypes import ShieldsProtocolPrivate
 from llama_stack.apis.safety import (
@@ -38,6 +38,22 @@ class QuestionValidityShieldImpl(Safety, ShieldsProtocolPrivate):
 
     async def shutdown(self) -> None:
         pass
+
+    async def run_moderation(self, input: str | list[str], model: str) -> ModerationObject:
+        return ModerationObject(
+            id="noop",
+            model=model,
+            results=[
+                ModerationObjectResults(
+                    flagged=False,
+                    categories={},
+                    category_scores={},
+                    category_applied_input_types={},
+                    user_message=None,
+                    metadata={"note": "run_moderation stubbed; use run_shield"},
+                )
+            ],
+        )
 
     async def run_shield(
         self,
